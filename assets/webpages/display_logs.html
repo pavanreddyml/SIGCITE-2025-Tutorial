@@ -89,7 +89,7 @@
 
     async function fetchLogs() {
       const n = Math.max(1, Math.min(parseInt(limitEl.value || '200', 10), 2000));
-      const url = `http://34.45.35.75:2500/fetch-logs/?n=${encodeURIComponent(n)}`;
+      const url = `http://40.90.225.54:2500/fetch-logs/?n=${encodeURIComponent(n)}`;
       const t0 = performance.now();
       statusEl.textContent = 'Loading…';
       try {
@@ -149,7 +149,7 @@
       if (!confirm('Delete all logs? This cannot be undone.')) return;
       deleteBtn.disabled = true;
       try {
-        const resp = await fetch('http://34.45.35.75:2500/delete-logs/', { method: 'POST' });
+        const resp = await fetch('http://40.90.225.54:2500/delete-logs/', { method: 'POST' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         statusEl.textContent = `Deleted ${data.deleted ?? 'all'} lines.`;
