@@ -1,0 +1,74 @@
+<!-- login.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Assignment Login</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .login-block { background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); padding: 40px; width: 100%; max-width: 400px; text-align: center; }
+    h1 { color: #0056b3; margin-bottom: 20px; }
+    input[type="text"] { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; margin-bottom: 20px; }
+    button { display: inline-block; width: 100%; background-color: #28a745; color: white; padding: 12px 20px; border: none; border-radius: 4px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.2s; }
+    button[disabled] { opacity: 0.7; cursor: not-allowed; }
+    button:hover { background-color: #218838; }
+  </style>
+</head>
+<body>
+  <div class="login-block">
+    <h1>Enter Your Username</h1>
+    <p>Please enter your username to begin the assignment.</p>
+
+    <form id="login-form" novalidate>
+      <input type="text" id="username" name="username" placeholder="e.g., jsmith123" aria-label="Username" required />
+      <button id="start-btn" type="submit">Start Assignment</button>
+    </form>
+  </div>
+
+  <script>
+    const SECRET_KEY = 'this-is-a-shared-secret-for-the-demo';
+
+    function base64UrlEncode(str) {
+      return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    function stringToArrayBuffer(str) {
+      const buf = new ArrayBuffer(str.length);
+      const bufView = new Uint8Array(buf);
+      for (let i = 0; i < str.length; i++) bufView[i] = str.charCodeAt(i);
+      return buf;
+    }
+
+    async function createToken(username, secret) {
+      const header = { alg: 'HS256', typ: 'JWT' };
+      const payload = { username };
+      const headerB64 = base64UrlEncode(JSON.stringify(header));
+      const payloadB64 = base64UrlEncode(JSON.stringify(payload));
+      const dataToSign = `${headerB64}.${payloadB64}`;
+      const key = await crypto.subtle.importKey('raw', stringToArrayBuffer(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const signatureBuffer = await crypto.subtle.sign('HMAC', key, stringToArrayBuffer(dataToSign));
+      const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      return `${dataToSign}.${signatureB64}`;
+    }
+
+    const form = document.getElementById('login-form');
+    const startBtn = document.getElementById('start-btn');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      if (!username) { alert('Username cannot be empty.'); return; }
+      startBtn.disabled = true;
+      try {
+        const token = await createToken(username, SECRET_KEY);
+        window.location.href = `assignment2.html?token=${encodeURIComponent(token)}`;
+      } catch (e) {
+        alert('Unexpected error creating token.');
+      } finally {
+        startBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

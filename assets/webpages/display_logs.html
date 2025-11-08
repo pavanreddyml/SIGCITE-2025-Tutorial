@@ -1,0 +1,172 @@
+<!-- Save as html_files/display_logs.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Exfil Logs Viewer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+
+    body { background-color: Canvas; color: CanvasText; }
+
+    header, .toolbar {
+      background-color: color-mix(in oklab, Canvas 95%, CanvasText 5%);
+      color: CanvasText;
+    }
+
+    input, button, select {
+      background-color: Field;
+      color: FieldText;
+      border: 1px solid GrayText;
+      font: inherit; padding: 6px 10px;
+    }
+
+    .container, .list, .log {
+      background-color: Canvas; color: CanvasText;
+      border-color: color-mix(in oklab, CanvasText 10%, Canvas 90%);
+    }
+
+    .empty { color: color-mix(in oklab, CanvasText 60%, Canvas 40%); }
+
+    body { margin: 0; padding: 16px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+    header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    h1 { font-size: 1.25rem; margin: 0; }
+    .controls { display: flex; gap: 8px; align-items: center; }
+    #status { font-size: .9rem; opacity: .75; }
+    pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; padding: 8px 10px; border-bottom: 1px solid #ddd4; }
+    .container { border: 1px solid #ddd4; border-radius: 8px; overflow: hidden; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #ddd4; }
+    .list { max-height: 70vh; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Exfil Logs</h1>
+    <div class="controls">
+      <label>Show last
+        <input id="limit" type="number" value="200" min="1" max="2000" style="width: 6rem;" />
+      lines</label>
+      <label>Auto-refresh
+        <select id="autorefresh">
+          <option value="0">Off</option>
+          <option value="5">5s</option>
+          <option value="10" selected>10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+        </select>
+      </label>
+      <button id="refresh">Refresh</button>
+    </div>
+    <div id="status"></div>
+  </header>
+
+  <div class="container">
+    <div class="toolbar">
+      <div>Newest first</div>
+      <div style="display:flex; gap:8px;">
+        <button id="copy">Copy all</button>
+        <button id="delete">Delete all</button>
+      </div>
+    </div>
+    <div id="list" class="list">
+      <div class="empty">No logs yet.</div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const list = $('#list');
+    const statusEl = $('#status');
+    const limitEl = $('#limit');
+    const refreshBtn = $('#refresh');
+    const copyBtn = $('#copy');
+    const deleteBtn = $('#delete');
+    const autoEl = $('#autorefresh');
+
+    let timer = null;
+
+    async function fetchLogs() {
+      const n = Math.max(1, Math.min(parseInt(limitEl.value || '200', 10), 2000));
+      const url = `http://34.45.35.75:2500/fetch-logs/?n=${encodeURIComponent(n)}`;
+      const t0 = performance.now();
+      statusEl.textContent = 'Loading…';
+      try {
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        renderLogs(data.lines || []);
+        const ms = Math.round(performance.now() - t0);
+        statusEl.textContent = `Loaded ${data.count} lines in ${ms} ms`;
+      } catch (e) {
+        renderLogs([]);
+        statusEl.textContent = `Failed to load logs: ${e.message}`;
+      }
+    }
+
+    function renderLogs(lines) {
+      list.innerHTML = '';
+      if (!lines.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No logs found.';
+        list.appendChild(empty);
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      for (const ln of lines) {
+        const div = document.createElement('div');
+        div.className = 'log';
+        const pre = document.createElement('pre');
+        pre.textContent = ln;
+        div.appendChild(pre);
+        frag.appendChild(div);
+      }
+      list.appendChild(frag);
+    }
+
+    function setAutoRefresh() {
+      const secs = parseInt(autoEl.value, 10);
+      if (timer) { clearInterval(timer); timer = null; }
+      if (secs > 0) {
+        timer = setInterval(fetchLogs, secs * 1000);
+      }
+    }
+
+    copyBtn.addEventListener('click', async () => {
+      const lines = [...document.querySelectorAll('.log pre')].map(pre => pre.textContent).join('\n');
+      try {
+        await navigator.clipboard.writeText(lines);
+        statusEl.textContent = 'Copied to clipboard.';
+      } catch (e) {
+        statusEl.textContent = `Copy failed: ${e.message}`;
+      }
+    });
+
+    // NEW: delete all logs (calls backend /delete-logs/ POST or DELETE)
+    deleteBtn.addEventListener('click', async () => {
+      if (!confirm('Delete all logs? This cannot be undone.')) return;
+      deleteBtn.disabled = true;
+      try {
+        const resp = await fetch('http://34.45.35.75:2500/delete-logs/', { method: 'POST' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        statusEl.textContent = `Deleted ${data.deleted ?? 'all'} lines.`;
+        renderLogs([]);
+      } catch (e) {
+        statusEl.textContent = `Delete failed: ${e.message}`;
+      } finally {
+        deleteBtn.disabled = false;
+      }
+    });
+
+    refreshBtn.addEventListener('click', fetchLogs);
+    autoEl.addEventListener('change', setAutoRefresh);
+
+    // Initial load
+    fetchLogs();
+    setAutoRefresh();
+  </script>
+</body>
+</html>

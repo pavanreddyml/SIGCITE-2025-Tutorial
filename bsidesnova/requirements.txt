@@ -1,0 +1,9 @@
+Flask
+flask_cors
+markdownify
+PyMupdf
+ollama
+playwright
+pillow
+html2text
+requests

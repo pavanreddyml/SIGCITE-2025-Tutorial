@@ -1,0 +1,118 @@
+<!-- assignment2.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Database Assignment</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8f9fa; max-width: 900px; margin: 40px auto; padding: 20px; }
+    .container { border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); background-color: #ffffff; padding: 20px; }
+    .hidden { display: none; }
+    h1, h2 { color: #0056b3; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
+    h1 { text-align: center; margin-bottom: 30px; }
+    .question-block { margin-bottom: 30px; }
+    .question-text { font-style: italic; color: #555; margin-bottom: 15px; }
+    .loading-text { text-align: center; font-size: 1.2rem; color: #6c757d; }
+    .error { border: 1px solid #f5c2c7; background: #f8d7da; color: #842029; padding: 12px; border-radius: 6px; margin-top: 12px; }
+    .actions { margin-top: 12px; display: flex; gap: 10px; }
+    .btn { display: inline-block; padding: 10px 14px; border-radius: 6px; border: 1px solid #dee2e6; text-decoration: none; color: #0d6efd; background: #e9f2ff; }
+    .btn:hover { background: #d9ebff; }
+  </style>
+</head>
+<body>
+  <div id="gate" class="container">
+    <p class="loading-text" id="status">Verifying your access token...</p>
+    <div id="error-box" class="error hidden" role="alert"></div>
+    <div class="actions hidden" id="error-actions">
+      <a class="btn" href="login.html">Back to login</a>
+      <button class="btn" id="retry-btn" type="button">Retry</button>
+    </div>
+  </div>
+
+  <div id="assignment-content" class="container hidden" aria-hidden="true">
+    <header><h1>Database Systems - Assignment</h1></header>
+    <main>
+      <section class="question-block" id="q1">
+        <h2>Question 1</h2>
+        <p class="question-text">[Placeholder for Question 1: Describe the query needed to retrieve all students from the 'Computer Science' department.]</p>
+      </section>
+      <section class="question-block" id="q2">
+        <h2>Question 2</h2>
+        <p class="question-text">[Placeholder for Question 2: Explain how to join the 'Courses' and 'Enrollments' tables to find the names of students enrolled in 'CS101'.]</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Minimal token sanity check
+    function looksLikeJWT(t) {
+      return typeof t === 'string' && t.split('.').length === 3 && t.length < 5000;
+    }
+
+    async function validateTokenOnce({ signal } = {}) {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (!token || !looksLikeJWT(token)) {
+        return { ok: false, reason: 'Invalid login. Token missing or malformed.' };
+      }
+
+      // Abort after 6s to avoid hanging on unreachable endpoints (e.g., GitHub Pages)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+
+      try {
+        // Replace with your real endpoint
+        const resp = await fetch(`http://localhost:8080/auth/${encodeURIComponent(token)}/`, {
+          method: 'GET',
+          signal: signal || controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timeout);
+
+        if (resp.ok) return { ok: true };
+        if (resp.status === 401 || resp.status === 403) {
+          return { ok: false, reason: 'Invalid login. Please check your credentials.' };
+        }
+        return { ok: false, reason: `Login failed (${resp.status}).` };
+      } catch (e) {
+        clearTimeout(timeout);
+        // Network/abort -> treat as invalid for demo purposes, but do NOT redirect
+        return { ok: false, reason: 'Invalid login. Network error or unreachable auth server.' };
+      }
+    }
+
+    async function gatekeep() {
+      const statusEl = document.getElementById('status');
+      const errEl = document.getElementById('error-box');
+      const actionsEl = document.getElementById('error-actions');
+      const contentEl = document.getElementById('assignment-content');
+
+      statusEl.textContent = 'Verifying your access token...';
+      errEl.classList.add('hidden');
+      actionsEl.classList.add('hidden');
+      contentEl.classList.add('hidden');
+      contentEl.setAttribute('aria-hidden', 'true');
+
+      const result = await validateTokenOnce();
+
+      if (result.ok) {
+        document.getElementById('gate').classList.add('hidden');
+        contentEl.classList.remove('hidden');
+        contentEl.removeAttribute('aria-hidden');
+      } else {
+        statusEl.textContent = 'Access denied';
+        errEl.textContent = result.reason || 'Invalid login.';
+        errEl.classList.remove('hidden');
+        actionsEl.classList.remove('hidden');
+        // IMPORTANT: do NOT redirect automatically. Keep user on this page.
+      }
+    }
+
+    document.getElementById('retry-btn').addEventListener('click', gatekeep);
+
+    // Run on load
+    gatekeep();
+  </script>
+</body>
+</html>

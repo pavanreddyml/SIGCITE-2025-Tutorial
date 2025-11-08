@@ -1,0 +1,55 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Create SSH Private Key on Runner
+        run: |
+          echo "${{ secrets.AZURE_SSH_PRIVATE_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+
+      - name: Connect to Azure VM and Remove Existing Project
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key_path: "private_key.pem"
+          script: |
+            PROJECT_DIR="/home/${{ secrets.AZURE_VM_USER }}/BSIDES"
+
+            echo "Removing existing project directory..."
+            rm -rf $PROJECT_DIR
+
+            echo "Creating project directory..."
+            mkdir -p $PROJECT_DIR
+            chmod 755 $PROJECT_DIR
+
+      - name: Copy Files to Azure VM
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key_path: "private_key.pem"
+          source: "."
+          target: "/home/${{ secrets.AZURE_VM_USER }}/BSIDES"
+
+      - name: Run Deploy Script on VM
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key_path: "private_key.pem"
+          script: |
+            cd /home/${{ secrets.AZURE_VM_USER }}/BSIDES/deployment
+            sed -i 's/\r$//' deploy.sh && chmod +x deploy.sh
+            ./deploy.sh
